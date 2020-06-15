@@ -1,46 +1,66 @@
-import pandas as pd
-import os
 import smtplib
-# import imghdr
-from email.message import EmailMessage
+import ssl
+import os
+import openpyxl as xl
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email import encoders
+from email.mime.base import MIMEBase
+
+username = os.environ.get('EMAIL_USER')
+password = os.environ.get('EMAIL_PASSWORD')
+From = username
+Subject = 'Resume'
+
+wb = xl.load_workbook(r'emails.xlsx')
+sheet1 = wb.get_sheet_by_name('Sheet1')
+names = []
+emails = []
+
+for cell in sheet1['A']:
+    emails.append(cell.value)
+
+for cell in sheet1['B']:
+    names.append(cell.value)
 
 
-#Read data from excel using pandas
-e = pd.read_excel("emails.xlsx")
+   
 
-#fetch email address
-emailsend = e['Emails'].values
 
-#User name and password from environment variables
-EMAIL_ADDRESS = os.environ.get('EMAIL_USER')
-EMAIL_PASSWORD = os.environ.get('EMAIL_PASSWORD')
+server = smtplib.SMTP_SSL('smtp.gmail.com', 1025)
 
-msg = EmailMessage()
-msg['Subject'] = 'MAIL by Python script'
-msg['From'] = EMAIL_ADDRESS
-msg['To'] = e['Emails'].values
-msg.set_content('Automated message by python script')
+server.login(username, password)
 
-files = ['resume.pdf']
+for i in range(len(emails)):
+    msg = MIMEMultipart()
+    msg['From'] = username
+    msg['To'] = names[i]
+    msg['Subject'] = Subject
+    text = '''
+Hello {},
+PFA my resume in order to check if this mail is working.
 
-for file in files:
-   with open(file,'rb') as f:
-      file_data = f.read()
-      file_name = f.name
-      
-msg.add_attachment(file_data,maintype='application',subtype='octet-stream',filename=file_name)
-
-with smtplib.SMTP_SSL('smtp.gmail.com',1025) as smtp:
-# # with smtplib.SMTP('smtp.gmail.com',1025) as smtp:
-#      smtp.ehlo()
-      smtp.starttls()
-#      smtp.ehlo()
-
-      smtp.login(EMAIL_ADDRESS,EMAIL_PASSWORD)
-
+'''.format(names[i])
+    msg.attach(MIMEText(text, 'plain'))
+    filename = "resume.pdf"
+    # Open PDF file in binary mode
+    with open(filename, "rb") as attachment:
+    # Add file as application/octet-stream
+    # Email client can usually download this automatically as attachment
+        part = MIMEBase("application", "octet-stream")
+        part.set_payload(attachment.read())
     
-#      body = 'Automated mail by python'
+    encoders.encode_base64(part)
 
-#      msg = f'Subject: {subject}\n\n{body}'
+# Add header as key/value pair to attachment part
+    part.add_header(
+    "Content-Disposition",
+    f"attachment; filename= {filename}",
+    )
+    msg.attach(part)
+    message = msg.as_string()
+    server.sendmail(username, emails[i], message)
+    print('Mail sent to', emails[i])
 
-      smtp.send_message(msg)
+server.quit()
+print('All emails sent successfully!')
